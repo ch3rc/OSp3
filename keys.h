@@ -23,8 +23,10 @@
 #include <sys/time.h>
 #include <time.h>
 #include <math.h>
+#include <semaphore.h>
 
 #define ARRAY 0x12345678
+#define SEMP 0x23456789
 
 extern int helpFlag;
 extern int arg;

@@ -17,10 +17,11 @@
 int helpFlag = 0;
 int arg = 16;
 char logFile[] = "log.dat";
-char adder[] = "adder_log.dat";
-int count;
+int count = 0;
 int status = 0;
-
+int launched = 0;
+int *pidsArr;
+int pids = 0;
 //=========================================================================
 //Memory sharing stuff
 //=========================================================================
@@ -31,10 +32,24 @@ int arrId = 0;
 int *arrPtr = NULL;
 int *sharedArray(key_t, size_t, int*);
 
+key_t key2 = SEMP;
+int semId = 0;
+sem_t *semPtr = NULL;
+size_t semSize = sizeof(sem_t);
+sem_t *sharedSem(key_t , size_t, int *);
+
+
 //detach and remove memory
 void cleanUp(void *, int);
 
-void fillArray();
+//=======================================================================
+//helper functions
+//======================================================================
+
+void fillArray(int);
+int square(int);
+void forkNDivided(int);
+
 //========================================================================
 //child stuff
 //========================================================================
@@ -42,60 +57,141 @@ pid_t childPid = 0;
 
 int exitPid = 0;
 
+void killAll(int);
+void timesUp(int);
 //========================================================================
 
 
 int main(int argc, char *argv[])
 {
-	count = 0;
 	
 	setopt(argc, argv);
+
+	if(arg % 2 != 0)
+	{
+		printf("number must be a power of 2\n");
+		exit(1);
+	}
+	
 	
 	if(helpFlag)
 	{
 		help();
 	}
 	
+	signal(SIGINT, killAll);
+	signal(SIGALRM, timesUp);
+	alarm(100);
+
 	writeTo();
 
 	arrPtr =  sharedArray(key1, count * sizeof(int), &arrId);
+	semPtr = sharedSem(key2, semSize, &semId);
 
-	fillArray();
-	
-	//test one child to make sure shared memory is set up properly
-	childPid = fork();
+	fillArray(arg);
 
-	if(childPid < 0)
+	FILE *fp;
+	time_t start;
+	time_t end;
+	float result;
+
+	fp = fopen("adder_log.dat", "a");
+	if(fp == NULL)
 	{
-		perror("ERROR: master: fork\n");
+		perror("ERROR: master: fp(main)\n");
 		exit(1);
 	}
 
-	if(childPid == 0)
-	{
-		char str[25];
-		snprintf(str, sizeof(str), "%d", 1);
-		execlp("./bin_adder",str, NULL);
-	}
+	fprintf(fp, "\nLog of %d/2 process\n", arg);
+	fprintf(fp, "\n\t-------------------\n");
+	fprintf(fp, "\t\tPID\t\tINDEX\t\tSIZE\n\n");
+
+	time(&start);	
+	forkNDivided(arg);
+	time(&end);
+
+	result = end - start;
+
+	fprintf(fp,"\n\n");
+	fprintf(fp,"time for %d/2 processess is time = %.2f\n\n", arg, result);
 	
-	if((exitPid = waitpid(childPid, &status, 0)) > 0)
-	{
-		if(WIFEXITED(status))
+	fclose(fp);
+
+	cleanUp(arrPtr, arrId);
+	cleanUp(semPtr, semId);
+	
+	return 0;
+}
+
+
+
+void forkNDivided(int arg)
+{
+
+	int position;
+	int i;
+	int nums = arg;
+	int squared = square(arg);
+
+	pidsArr = (int *)calloc(arg, sizeof(int));
+	
+	for(i = 1; i <= squared; i++)
+	{	
+		position = 0;
+		while(1)
 		{
-			printf("child has finished!\n");
+			if(launched < 20)
+			{
+				childPid = fork();
+
+				if(childPid < 0)
+				{
+					perror("ERROR: master: fork\n");
+					exit(1);
+				}
+				
+				if(childPid == 0)
+				{
+					char xx[20];
+					char yy[20];
+					snprintf(xx, sizeof(xx), "%d", position);
+					snprintf(yy, sizeof(yy), "%d", nums);
+					execlp("./bin_adder", xx, yy, NULL);
+				}
+
+				pidsArr[pids] = childPid;
+				pids++;
+				position++;
+				launched++;
+				
+			}
+
+			if((exitPid = waitpid((pid_t)-1, &status, 0)) > 0)
+			{
+				if(WIFEXITED(status))
+				{
+					launched--;
+				}
+			}
+			
+
+			if(position >= nums)
+				break;
+		}
+
+
+		nums = nums / 2;
+		
+		if(nums == 1)
+		{
+			break;
 		}
 	}
-
-	printf("MASTER IS CLEANING UP MEMORY\n");
-	cleanUp(arrPtr, arrId);
-	printf("MASTER HAS FINISHED REMOVING MEMORY\n");
-
-	print();
-
-	return 0;
+		
 	
 }
 
+//==============================================================================
 void setopt(int argc, char **argv)
 {
 	int c;
@@ -135,7 +231,7 @@ void writeTo()
 	fclose(fp);
 }
 
-void fillArray()
+void fillArray(int size)
 {
 	char buf[1024];
 	char *str[1024];
@@ -153,14 +249,28 @@ void fillArray()
 	
 
 
-	for(i = 0; i < count; i++)
+	for(i = 0; i < size; i++)
 	{
 		arrPtr[i] = atoi(str[i]);
-	}
+	}	
 	
 	
 	
 	fclose(fp);
+}
+ 
+int square(int num)
+{
+	if(num == 0 || num == 1)
+		return num;
+	
+	int i = 1, result = 1;
+	while(result <= num)
+	{ 
+		i++;
+		result = i * i;
+	}
+	return i - 1;
 }
 
 //===========================================================================
@@ -170,7 +280,7 @@ int *sharedArray(key_t key, size_t size, int *shmid)
 	*shmid = shmget(key, size, PERM);
 	if(*shmid < 0)
 	{
-		perror("ERROR: master: shmat(sharedArray)\n");
+		perror("ERROR: master: shmget(sharedArray)\n");
 		exit(1);
 	}
 	
@@ -178,6 +288,31 @@ int *sharedArray(key_t key, size_t size, int *shmid)
 	if(temp == (void *)-1)
 	{
 		perror("ERROR: master: shmat (sharedArray)\n");
+		exit(1);
+	}
+
+	return temp;
+}
+
+sem_t *sharedSem(key_t key, size_t size, int *shmid)
+{
+	*shmid = shmget(key, size, PERM);
+	if(*shmid < 0)
+	{
+		perror("ERROR: master: shmget(sharedSem)\n");
+		exit(1);
+	}
+
+	sem_t *temp = (sem_t *)shmat(*shmid, NULL, 0);
+	if(temp == (sem_t *)-1)
+	{
+		perror("ERROR: master: shmat(sharedSem)\n");
+		exit(1);
+	}
+
+	if(sem_init(temp, 1, 1) == -1)
+	{
+		perror("ERROR: master: sem_init(sharedSem)\n");
 		exit(1);
 	}
 
@@ -199,12 +334,62 @@ void cleanUp(void *ptr, int id)
 	}
 }
 
+
+void killAll(int sig)
+{
+	char msg[] = "\nkilling all processes\n";
+	int msgSize = sizeof(msg);
+	write(STDERR_FILENO, msg, msgSize);
+
+	shmctl(arrId, IPC_RMID, NULL);
+	shmctl(semId, IPC_RMID, NULL);
+
+	int i;
+	for(i = 0; i < pids; i++)
+	{
+		if(pidsArr[i] !=  0)
+		{
+			if(kill(pidsArr[i], SIGTERM) == -1)
+			{
+				perror("ERROR: master: SIGTERM(killAll)\n");
+			}
+		}
+	}
+	
+	free(pidsArr);
+	exit(0);
+}
+
+void timesUp(int sig)
+{
+	char msg[] = "\nprogram has reached 100 seconds\n";
+	int msgSize = sizeof(msg);
+	write(STDERR_FILENO, msg, msgSize);
+
+	shmctl(arrId, IPC_RMID, NULL);
+	shmctl(semId, IPC_RMID, NULL);
+	int i;
+	for(i = 0; i < pids; i++)
+	{
+		if(pidsArr[i] != 0)
+		{
+			if(kill(pidsArr[i], SIGTERM) == -1)
+			{
+				perror("ERROR: master: SIGTERM(timesUp)\n");
+			}
+		}
+	}
+
+	free(pidsArr);
+	exit(0);
+}
+
 //============================================================================
 
 void help()
 {
 	printf("-----HELP MESSAGE-----\n\n");
-	printf("-r: number to imput, between 16 and 128. default is 16\n");
+	printf("-r: number of integers to add between 16 and 64. default is 16\n");
 }
 
 void print()
