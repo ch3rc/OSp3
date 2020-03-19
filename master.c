@@ -7,7 +7,7 @@
 //=========================================================================
 
 #include "keys.h"
-
+#include <math.h>
 #define PERM (IPC_CREAT | 0666)
 
 //=========================================================================
@@ -22,6 +22,7 @@ int status = 0;
 int launched = 0;
 int *pidsArr;
 int pids = 0;
+int DEBUG = 0;
 //=========================================================================
 //Memory sharing stuff
 //=========================================================================
@@ -49,7 +50,7 @@ void cleanUp(void *, int);
 void fillArray(int);
 int square(int);
 void forkNDivided(int);
-
+void logPro(int);
 //========================================================================
 //child stuff
 //========================================================================
@@ -79,65 +80,167 @@ int main(int argc, char *argv[])
 		help();
 	}
 	
+	//signals for alarm and CTRL+C	
 	signal(SIGINT, killAll);
 	signal(SIGALRM, timesUp);
 	alarm(100);
-
+	
+	//create log.dat with 64 ints ranging from [0,256)
 	writeTo();
 
 	arrPtr =  sharedArray(key1, count * sizeof(int), &arrId);
 	semPtr = sharedSem(key2, semSize, &semId);
-
+	
+	//filling array pointer
 	fillArray(arg);
+	
 
 	FILE *fp;
-	time_t start;
-	time_t end;
-	float result;
-
 	fp = fopen("adder_log.dat", "a");
 	if(fp == NULL)
 	{
-		perror("ERROR: master: fp(main)\n");
+		perror("ERROR: master: fp\n");
 		exit(1);
 	}
 
-	fprintf(fp, "\nLog of %d/2 process\n", arg);
-	fprintf(fp, "\n\t-------------------\n");
-	fprintf(fp, "\t\tPID\t\tINDEX\t\tSIZE\n\n");
 
-	time(&start);	
-	forkNDivided(arg);
-	time(&end);
 
-	result = end - start;
+	//n/2 processess
+	if(DEBUG == 0)
+	{
+		time_t start;
+		time_t end;
+		float result;
 
-	fprintf(fp,"\n\n");
-	fprintf(fp,"time for %d/2 processess is time = %.2f\n\n", arg, result);
+		fprintf(fp, "\nLog of %d/2 process\n", arg);
+		fprintf(fp, "\n\t-------------------\n");
+		fprintf(fp, "\t\tPID\t\tINDEX\t\tSIZE\n\n");
+
+		time(&start);	
+		forkNDivided(arg);
+		time(&end);
+
+		result = end - start;
+
+		fprintf(fp,"\n\n");
+		fprintf(fp,"time for %d/2 processess is time = %.2f\n\n", arg, result);
+	}
 	
-	fclose(fp);
+	//logn processess
+	if(DEBUG == 1)
+	{
+		time_t start2;
+		time_t end2;
+		int result2;
 
+		fprintf(fp, "\nLog of log(%d) process\n", arg);
+		fprintf(fp, "\nt----------------\n");
+		fprintf(fp,"\t\tPID\t\tINDEX\t\tSIZE\n\n");
+
+		time(&start2);
+		logPro(arg);
+		time(&end2);
+
+		result2 = end2 - start2;
+
+		fprintf(fp, "\n\n");
+		fprintf(fp, "time for log(%d) process is time = %.2f\n\n", arg, result2);
+	}
+
+
+	fclose(fp);		
 	cleanUp(arrPtr, arrId);
 	cleanUp(semPtr, semId);
-	
+
 	return 0;
 }
 
 
 
+void logPro(int arg)
+{
+	//get number of pairs by log2 of arg then divide by args to get pairs
+	int position;
+	int i;
+	int nums = arg;
+	int logNums = log2(nums);
+	int pairs = (nums / logNums);
+
+	pidsArr = (int *)calloc(arg, sizeof(int));
+	
+	while(1)
+	{
+		position = 0;
+		for(i = 0; i < pairs; i++)
+		{
+			
+			if(launched < 20)
+			{
+				childPid = fork();
+
+				if(childPid < 0)
+				{
+					perror("ERROR: master: fork(nlogn)\n");
+					exit(1);
+				}
+				
+				if(childPid == 0)
+				{
+					char xx[20];
+					char yy[20];
+					snprintf(xx, sizeof(xx), "%d", position);
+					snprintf(yy, sizeof(yy), "%d", logNums);
+					execlp("./bin_adder", xx, yy, NULL);
+				}
+				
+				pidsArr[pids] = childPid;
+				pids++;
+				launched++;
+				position++;
+			}
+			
+			if((exitPid = waitpid((pid_t)-1, &status, 0)) > 0)
+			{
+				if(WIFEXITED(status))
+				{
+					launched--;
+				}
+			}
+			
+			if(position >= logNums)
+				break;
+		}
+		
+	
+		if(logNums == 0)
+		{
+			break;
+		}
+		
+		logNums--;
+		//use part ones method to divide my n/2 processess
+		nums = nums / 2;
+		pairs = ceil(nums / logNums);
+	}
+}
+
 void forkNDivided(int arg)
 {
-
+	//get square root of arg to know how many pairs there will be
 	int position;
 	int i;
 	int nums = arg;
 	int squared = square(arg);
+	int exitedkids;
 
 	pidsArr = (int *)calloc(arg, sizeof(int));
 	
+	
 	for(i = 1; i <= squared; i++)
 	{	
-		position = 0;
+		position = 1;
+		launched = 0;
+		exitedkids = nums / 2;		
 		while(1)
 		{
 			if(launched < 20)
@@ -154,38 +257,42 @@ void forkNDivided(int arg)
 				{
 					char xx[20];
 					char yy[20];
-					snprintf(xx, sizeof(xx), "%d", position);
+					snprintf(xx, sizeof(xx), "%d", (position - 1));
 					snprintf(yy, sizeof(yy), "%d", nums);
 					execlp("./bin_adder", xx, yy, NULL);
 				}
-
+			
 				pidsArr[pids] = childPid;
 				pids++;
-				position++;
 				launched++;
-				
-			}
+				position++;
+			}	
+			
 
 			if((exitPid = waitpid((pid_t)-1, &status, 0)) > 0)
 			{
 				if(WIFEXITED(status))
 				{
-					launched--;
+					exitedkids--;			
 				}
 			}
 			
-
-			if(position >= nums)
+				
+			if(exitedkids == 0)
 				break;
+			//when we break we divide number of processes by 2
+			if((position * 2) >= nums)
+			{
+				nums = nums / 2;
+				break;
+			}
 		}
-
-
-		nums = nums / 2;
 		
 		if(nums == 1)
 		{
 			break;
 		}
+
 	}
 		
 	
@@ -196,7 +303,7 @@ void setopt(int argc, char **argv)
 {
 	int c;
 
-	while((c = getopt(argc, argv, "hr:")) != -1)
+	while((c = getopt(argc, argv, "hr:x")) != -1)
 	{
 		switch(c)
 		{
@@ -207,14 +314,16 @@ void setopt(int argc, char **argv)
 			case 'r':
 				arg = atoi(optarg);
 				break;
-
+			case 'x':
+				DEBUG = 1;
+				break;
 			case '?':
 				fprintf(stderr, "unknown option\n");
 				exit(EXIT_FAILURE);
 		}
 	}
 }
-
+//random number generator
 void writeTo()
 {
 	srand(time(0));
@@ -230,7 +339,7 @@ void writeTo()
 		
 	fclose(fp);
 }
-
+//fill shared memory array
 void fillArray(int size)
 {
 	char buf[1024];
@@ -258,7 +367,7 @@ void fillArray(int size)
 	
 	fclose(fp);
 }
- 
+//square root of number for processess on method 1 
 int square(int num)
 {
 	if(num == 0 || num == 1)
@@ -274,7 +383,8 @@ int square(int num)
 }
 
 //===========================================================================
-
+//shared memory functions
+//==========================================================================
 int *sharedArray(key_t key, size_t size, int *shmid)
 {
 	*shmid = shmget(key, size, PERM);
@@ -334,7 +444,7 @@ void cleanUp(void *ptr, int id)
 	}
 }
 
-
+//ctrl+c kill processess function
 void killAll(int sig)
 {
 	char msg[] = "\nkilling all processes\n";
@@ -359,7 +469,7 @@ void killAll(int sig)
 	free(pidsArr);
 	exit(0);
 }
-
+//alarm function
 void timesUp(int sig)
 {
 	char msg[] = "\nprogram has reached 100 seconds\n";
@@ -390,6 +500,7 @@ void help()
 {
 	printf("-----HELP MESSAGE-----\n\n");
 	printf("-r: number of integers to add between 16 and 64. default is 16\n");
+	printf("-x: DEBUG flag to run log(n) processes\n");
 }
 
 void print()

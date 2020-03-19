@@ -12,6 +12,7 @@
 
 int count;
 char adder[] = "adder_log.dat";
+int DEBUG;
 //======================================================================
 //shared memory stuff
 //======================================================================
@@ -31,6 +32,8 @@ sem_t *getSharedSem(key_t, size_t, int *);
 void removeMem(void *);
 
 void nDivided(int, int);
+
+void logDivided(int, int);
 //======================================================================
 //
 //======================================================================
@@ -44,10 +47,73 @@ int main(int argc, char *argv[])
 	int start = atoi(argv[0]);
 	int end = atoi(argv[1]);
 
-	nDivided(start, end);
-	
+	if(DEBUG == 0)
+	{
+		nDivided(start, end);
+	}
+
+
+	if(DEBUG == 1)
+	{
+		logDivided(start, end);
+	}
+
 	exit(12);
 }
+
+
+
+
+
+
+
+void logDivided(start, end)
+{
+	FILE *fp;
+	fp = fopen(adder, "a");
+	if(fp == NULL)
+	{
+		perror("ERROR: bin_adder: fp(logDivided\n");
+		exit(1);
+	}
+
+	int child1;
+	int child2;
+	int sum;
+	int half = end/2;
+	int second = start + half;
+	//same process used with method one. start a position zero for first child
+	//start at start + half of number of processess for second child
+	for(child1 = start, child2 = second; child1 < half, child2 < end; child1++, child2++)
+	{
+		//sum of each number
+		sum = arrPtr[child1] + arrPtr[child2];
+
+		sem_wait(semPtr);
+	
+		fprintf(stderr, "\nentering-> child: %d time: %ld\n",getpid(), time(NULL));
+	
+		sleep(1);
+		//critical section
+		fprintf(fp, "\n\t\t%d\t\t%d\t\t%d",getpid(), start, end);
+	
+		fprintf(fp, "\t\t %d and %d \t\t %d + %d \t\t %d\t\t%d\n", child1, child2,
+			arrPtr[child1], arrPtr[child2], child1, sum);
+	
+		sleep(1);
+
+		fprintf(stderr, "\nexiting -> child: %d time %ld\n", getpid(), time(NULL));
+
+		sem_post(semPtr);
+		//sum saved to first position for next round
+		arrPtr[child1] = sum;
+	}
+
+	removeMem(arrPtr);
+	removeMem(semPtr);
+	exit(12);
+}
+
 
 void nDivided(int start, int end)
 {
@@ -64,12 +130,16 @@ void nDivided(int start, int end)
 	int sum;
 	int half = end / 2;
 	int second = start + half;
-
+	//start child1 at position zero and child2 at position 0 + half of end and increment
+	//until end;
 	for(child1 = start, child2 = second; child1 < half, child2 < end; child1++, child2++)
 	{
+
 		sum = arrPtr[child1] + arrPtr[child2];
 		
 		sem_wait(semPtr);
+		
+		fprintf(stderr, "\n start = %d, end = %d\n",start, end);		
 
 		fprintf(stderr, "\nentering -> child: %d time %ld\n", getpid(), time(NULL));
 
@@ -91,8 +161,11 @@ void nDivided(int start, int end)
 	fclose(fp);
 	removeMem(arrPtr);
 	removeMem(semPtr);
+	exit(12);
 }
 
+//=======================================================================
+//shared memory functions
 //=======================================================================
 int *getArray(key_t key, size_t size, int *shmid)
 {

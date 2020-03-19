@@ -33,6 +33,7 @@ extern int arg;
 extern char logFile[];
 extern char adder[];
 extern int count;
+extern int DEBUG;
 
 void setopt(int, char **);
 void help();

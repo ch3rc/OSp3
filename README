@@ -1,14 +1,12 @@
 =====================================================================================
 				  Compile and Run
 =====================================================================================
-Initial commit for project 3
+to compile run 'make'
 
-
-
-
-
-
-
+to execute run './master'
+-h: for help
+-r: for integer to test processes on
+-x: to run logn processess
 
 ======================================================================================
 					Github
@@ -19,15 +17,9 @@ All logs can be found at https://github.com/ch3rc/OSp3
 ======================================================================================
 					Issues
 ======================================================================================
+my n/2 processess was working fine until i added in logn processess. I couldnt figure
+out what the issue was. the default will run 5 loops of 16 before going to eight.
+the timer will kill the n/2 processess around size 4.
 
-
-
-
-
-
-
-
-
-
-
+gave it a shot and will the the L on this one.
 ======================================================================================
