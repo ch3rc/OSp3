@@ -14,15 +14,15 @@
 //Global stuff
 //=========================================================================
 
-int helpFlag = 0;
-int arg = 16;
+int helpFlag;
+int arg = 4;
 char logFile[] = "log.dat";
 int count = 0;
 int status = 0;
 int launched = 0;
 int *pidsArr;
 int pids = 0;
-int DEBUG = 0;
+int debug;
 //=========================================================================
 //Memory sharing stuff
 //=========================================================================
@@ -47,6 +47,7 @@ void cleanUp(void *, int);
 //helper functions
 //======================================================================
 
+void init();
 void fillArray(int);
 int square(int);
 void forkNDivided(int);
@@ -66,6 +67,8 @@ void timesUp(int);
 int main(int argc, char *argv[])
 {
 	
+	init();
+
 	setopt(argc, argv);
 
 	if(arg % 2 != 0)
@@ -79,6 +82,7 @@ int main(int argc, char *argv[])
 	{
 		help();
 	}
+	
 	
 	//signals for alarm and CTRL+C	
 	signal(SIGINT, killAll);
@@ -106,14 +110,13 @@ int main(int argc, char *argv[])
 
 
 	//n/2 processess
-	if(DEBUG == 0)
+	if(debug == 0)
 	{
 		time_t start;
 		time_t end;
 		float result;
 
 		fprintf(fp, "\nLog of %d/2 process\n", arg);
-		fprintf(fp, "\n\t-------------------\n");
 		fprintf(fp, "\t\tPID\t\tINDEX\t\tSIZE\n\n");
 
 		time(&start);	
@@ -127,14 +130,13 @@ int main(int argc, char *argv[])
 	}
 	
 	//logn processess
-	if(DEBUG == 1)
+	if(debug == 1)
 	{
 		time_t start2;
 		time_t end2;
-		int result2;
+		float result2;
 
 		fprintf(fp, "\nLog of log(%d) process\n", arg);
-		fprintf(fp, "\nt----------------\n");
 		fprintf(fp,"\t\tPID\t\tINDEX\t\tSIZE\n\n");
 
 		time(&start2);
@@ -164,13 +166,14 @@ void logPro(int arg)
 	int i;
 	int nums = arg;
 	int logNums = log2(nums);
-	int pairs = (nums / logNums);
+	int pairs = (int)(nums / logNums);
 
 	pidsArr = (int *)calloc(arg, sizeof(int));
 	
 	while(1)
 	{
 		position = 0;
+		//break up into initial pairs
 		for(i = 0; i < pairs; i++)
 		{
 			
@@ -211,16 +214,20 @@ void logPro(int arg)
 				break;
 		}
 		
-	
+		logNums--;
+
 		if(logNums == 0)
 		{
 			break;
 		}
 		
-		logNums--;
 		//use part ones method to divide my n/2 processess
 		nums = nums / 2;
-		pairs = ceil(nums / logNums);
+
+		//floor of log2n numbers divided by total so that
+		//the array doesnt try to add with a non existent number
+		
+		pairs = (int)(nums / logNums);
 	}
 }
 
@@ -231,16 +238,11 @@ void forkNDivided(int arg)
 	int i;
 	int nums = arg;
 	int squared = square(arg);
-	int exitedkids;
-
 	pidsArr = (int *)calloc(arg, sizeof(int));
 	
-	
-	for(i = 1; i <= squared; i++)
+	while(squared != 0)
 	{	
-		position = 1;
-		launched = 0;
-		exitedkids = nums / 2;		
+		position = 0;
 		while(1)
 		{
 			if(launched < 20)
@@ -257,7 +259,7 @@ void forkNDivided(int arg)
 				{
 					char xx[20];
 					char yy[20];
-					snprintf(xx, sizeof(xx), "%d", (position - 1));
+					snprintf(xx, sizeof(xx), "%d", position);
 					snprintf(yy, sizeof(yy), "%d", nums);
 					execlp("./bin_adder", xx, yy, NULL);
 				}
@@ -266,28 +268,26 @@ void forkNDivided(int arg)
 				pids++;
 				launched++;
 				position++;
-			}	
-			
-
+			}			
+	
 			if((exitPid = waitpid((pid_t)-1, &status, 0)) > 0)
 			{
 				if(WIFEXITED(status))
 				{
-					exitedkids--;			
+					launched--;			
 				}
 			}
 			
-				
-			if(exitedkids == 0)
-				break;
+	
 			//when we break we divide number of processes by 2
-			if((position * 2) >= nums)
+			if(position >= nums)
 			{
-				nums = nums / 2;
 				break;
 			}
 		}
 		
+		nums = (nums / 2);
+
 		if(nums == 1)
 		{
 			break;
@@ -315,7 +315,7 @@ void setopt(int argc, char **argv)
 				arg = atoi(optarg);
 				break;
 			case 'x':
-				DEBUG = 1;
+				debug = 1;
 				break;
 			case '?':
 				fprintf(stderr, "unknown option\n");
@@ -501,6 +501,12 @@ void help()
 	printf("-----HELP MESSAGE-----\n\n");
 	printf("-r: number of integers to add between 16 and 64. default is 16\n");
 	printf("-x: DEBUG flag to run log(n) processes\n");
+}
+
+void init()
+{
+	helpFlag = 0;
+	debug = 0;
 }
 
 void print()

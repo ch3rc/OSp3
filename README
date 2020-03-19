@@ -8,6 +8,12 @@ to execute run './master'
 -r: for integer to test processes on
 -x: to run logn processess
 
+Ctrl + c will kill all child processess if pressed during the runtime. Master will
+cycle through the pid array of active children and terminate thier process.
+
+An alarm is set for 100 seconds and will do the same thing as ctrl+c if the time 
+limit is reached. This should only happen for n/2 processess if 64 is input.
+
 ======================================================================================
 					Github
 ======================================================================================
@@ -17,9 +23,11 @@ All logs can be found at https://github.com/ch3rc/OSp3
 ======================================================================================
 					Issues
 ======================================================================================
-my n/2 processess was working fine until i added in logn processess. I couldnt figure
-out what the issue was. the default will run 5 loops of 16 before going to eight.
-the timer will kill the n/2 processess around size 4.
+was running into issues trying to use a forloop in the child process
 
-gave it a shot and will the the L on this one.
+let the child processess naturally increment from index in master. Once i did this
+i was able to fix my incrementing problem.
+
+for some reason i am still getting the printout in master at the bottom rather than
+the top but thats small potatoes.
 ======================================================================================

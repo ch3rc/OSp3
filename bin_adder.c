@@ -9,10 +9,9 @@
 #include "keys.h"
 
 #define PERM (IPC_CREAT | 0666)
-
+int debug;
 int count;
 char adder[] = "adder_log.dat";
-int DEBUG;
 //======================================================================
 //shared memory stuff
 //======================================================================
@@ -47,24 +46,20 @@ int main(int argc, char *argv[])
 	int start = atoi(argv[0]);
 	int end = atoi(argv[1]);
 
-	if(DEBUG == 0)
+	if(debug == 0)
 	{
 		nDivided(start, end);
 	}
 
 
-	if(DEBUG == 1)
+	if(debug == 1)
 	{
 		logDivided(start, end);
 	}
+	
 
 	exit(12);
 }
-
-
-
-
-
 
 
 void logDivided(start, end)
@@ -82,27 +77,32 @@ void logDivided(start, end)
 	int sum;
 	int half = end/2;
 	int second = start + half;
+	child1 = start;
+	child2 = second;
+
 	//same process used with method one. start a position zero for first child
 	//start at start + half of number of processess for second child
-	for(child1 = start, child2 = second; child1 < half, child2 < end; child1++, child2++)
+	if(child1 < half)
 	{
 		//sum of each number
 		sum = arrPtr[child1] + arrPtr[child2];
 
 		sem_wait(semPtr);
 	
-		fprintf(stderr, "\nentering-> child: %d time: %ld\n",getpid(), time(NULL));
+		fprintf(stderr,"logn start = %d, end = %d\n\n", start, end);
+		
+		fprintf(stderr, "\nentering: child: %d time: %ld\n",getpid(), time(NULL));
 	
 		sleep(1);
 		//critical section
-		fprintf(fp, "\n\t\t%d\t\t%d\t\t%d",getpid(), start, end);
+		fprintf(fp, "\n\t%d\t%d\t%d",getpid(), start, end);
 	
-		fprintf(fp, "\t\t %d and %d \t\t %d + %d \t\t %d\t\t%d\n", child1, child2,
+		fprintf(fp, "\t %d and %d \t %d + %d \t %d\t%d\n", child1, child2,
 			arrPtr[child1], arrPtr[child2], child1, sum);
 	
 		sleep(1);
 
-		fprintf(stderr, "\nexiting -> child: %d time %ld\n", getpid(), time(NULL));
+		fprintf(stderr, "\nexiting: child: %d time %ld\n", getpid(), time(NULL));
 
 		sem_post(semPtr);
 		//sum saved to first position for next round
@@ -111,7 +111,7 @@ void logDivided(start, end)
 
 	removeMem(arrPtr);
 	removeMem(semPtr);
-	exit(12);
+	//exit(12);
 }
 
 
@@ -130,38 +130,41 @@ void nDivided(int start, int end)
 	int sum;
 	int half = end / 2;
 	int second = start + half;
-	//start child1 at position zero and child2 at position 0 + half of end and increment
-	//until end;
-	for(child1 = start, child2 = second; child1 < half, child2 < end; child1++, child2++)
-	{
+	child1 = start;
+	child2 = second;
 
+	//start child1 at position zero and child2 at position 0 + half of end and increment
+	//start until halfway, if child is one below half we stop counting for this pair of
+	//processes.
+	if(child1 < half)
+	{
 		sum = arrPtr[child1] + arrPtr[child2];
 		
 		sem_wait(semPtr);
 		
 		fprintf(stderr, "\n start = %d, end = %d\n",start, end);		
 
-		fprintf(stderr, "\nentering -> child: %d time %ld\n", getpid(), time(NULL));
+		fprintf(stderr, "\nentering:  child: %d time %ld\n", getpid(), time(NULL));
 
 		sleep(1);
 		//critical section
-		fprintf(fp,"\n\t\t%d\t\t%d\t\t%d", getpid(), start, end);
+		fprintf(fp,"\n\t%d\t%d\t%d", getpid(), start, end);
 
-		fprintf(fp, "\t\t %d and %d \t\t %d + %d \t\t %d\t\t%d\n", child1, child2,
+		fprintf(fp, "\t%d and %d \t %d + %d \t %d\t%d\n", child1, child2,
 			arrPtr[child1], arrPtr[child2], child1, sum);
 
 		sleep(1);
 
-		fprintf(stderr, "\nexiting -> child: %d time %ld\n", getpid(), time(NULL));
+		fprintf(stderr, "\nexiting:  child: %d time %ld\n", getpid(), time(NULL));
 
 		sem_post(semPtr);
-
+	
 		arrPtr[child1] = sum;
 	}
 	fclose(fp);
 	removeMem(arrPtr);
 	removeMem(semPtr);
-	exit(12);
+	//exit(12);
 }
 
 //=======================================================================
